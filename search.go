@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"time"
 
 	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	_ "github.com/mattn/go-sqlite3"
@@ -18,6 +19,7 @@ type Response struct {
 	KW  string   `json:"kw"`  // keywords
 	CN  string   `json:"cn"`  // country
 	DN  []string `json:"dn"`  // domains
+	MS  int64    `json:"ms"`  // processing time in milliseconds
 	ERR int      `json:"err"` // error code (0 on success)
 }
 
@@ -79,10 +81,13 @@ func encode(text string, ollamaURL string, modelName string) ([]float64, error) 
 
 // getMatchingDomains searches for matching domains using keywords and returns results
 func getMatchingDomains(keywords string, country string, dbPath string, ollamaURL string, modelName string) (Response, error) {
+	startTime := time.Now()
+
 	resp := Response{
 		KW:  keywords,
 		CN:  country,
 		DN:  []string{},
+		MS:  0,
 		ERR: 0,
 	}
 
@@ -99,6 +104,7 @@ func getMatchingDomains(keywords string, country string, dbPath string, ollamaUR
 	embedding, err := encode(keywords, ollamaURL, modelName)
 	if err != nil {
 		resp.ERR = 1
+		resp.MS = time.Since(startTime).Milliseconds()
 		return resp, fmt.Errorf("failed to encode keywords: %w", err)
 	}
 
@@ -106,6 +112,7 @@ func getMatchingDomains(keywords string, country string, dbPath string, ollamaUR
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		resp.ERR = 2
+		resp.MS = time.Since(startTime).Milliseconds()
 		return resp, fmt.Errorf("failed to open database: %w", err)
 	}
 	defer db.Close()
@@ -113,6 +120,7 @@ func getMatchingDomains(keywords string, country string, dbPath string, ollamaUR
 	// Verify connection
 	if err := db.Ping(); err != nil {
 		resp.ERR = 3
+		resp.MS = time.Since(startTime).Milliseconds()
 		return resp, fmt.Errorf("failed to ping database: %w", err)
 	}
 
@@ -137,6 +145,7 @@ func getMatchingDomains(keywords string, country string, dbPath string, ollamaUR
 	rows, err := db.Query(query, embeddingBlob)
 	if err != nil {
 		resp.ERR = 4
+		resp.MS = time.Since(startTime).Milliseconds()
 		return resp, fmt.Errorf("failed to execute query: %w", err)
 	}
 	defer rows.Close()
@@ -148,6 +157,7 @@ func getMatchingDomains(keywords string, country string, dbPath string, ollamaUR
 		var distance float64
 		if err := rows.Scan(&domain, &resultCountry, &distance); err != nil {
 			resp.ERR = 5
+			resp.MS = time.Since(startTime).Milliseconds()
 			return resp, fmt.Errorf("failed to scan row: %w", err)
 		}
 
@@ -159,9 +169,11 @@ func getMatchingDomains(keywords string, country string, dbPath string, ollamaUR
 
 	if err := rows.Err(); err != nil {
 		resp.ERR = 6
+		resp.MS = time.Since(startTime).Milliseconds()
 		return resp, fmt.Errorf("error iterating rows: %w", err)
 	}
 
 	resp.DN = domains
+	resp.MS = time.Since(startTime).Milliseconds()
 	return resp, nil
 }

@@ -135,6 +135,52 @@ It will use these 10 search phrases:
 ... and it will show the results for each test along with the time (in millisecsons) and the average time overall.
 
 
+Step 6: 
+
+We will make an improvement. We will add a time to the results as 'ms' for milliseconds that the processing
+took to complete. The json for a query will include 'ms' like so:
+
+{
+  'kw': 'new truck',
+  'cn': 'us',
+  'dn': ['napaonline.com', 'ford.com', 'suncentauto.com'],
+  'ms': 24,
+  'err': 0
+}
+
+
+Step 7:
+
+We will now change the module so that the search call will accept a threshold that is a matching cutoff. The score 
+must be above the threshold or nothing will be returned. This should be a number from 0.0 - 1.0. Tests should be 
+updated to reflect this change and use a threshold of 0.5. This should result in a test query:
+
+Keywords: "new truck"
+
+Results:
+{
+  'kw': 'new truck',
+  'cn': 'us',
+  'dn': ['napaonline.com', 'ford.com', 'suncentauto.com'],
+  'err': 0
+}
+
+
+Step 8:
+
+We will also add a limit to the number of items returned. The number of items returned should be accepted in the 
+module call (tests should be updated to reflect 3 as the number to return).
+
+
+Step 9: update main.go to be a utility and example of how to use the module
+
+Now, we will update main.go to take a command line argument for the keywords to search on, the database location, 
+the ollama URL, and the model to use. We will default the model to the nomic model one we have been using; the 
+ollama url to the localhost:11434 url that we have been using in the tests; the database location to the reference 
+database in the tests. 
+
+If a keyword phrase is passed on the command line, we will use it as the keyword and run a single search. If not, 
+we will read stdin one line at a time and run each as individual queries. 
 
 
 
