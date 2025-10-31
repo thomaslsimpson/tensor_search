@@ -176,7 +176,7 @@ func getMatchingDomains(keywords string, country string, threshold float64, limi
 		// Filter by country if specified (and country matches)
 		if country == "" || resultCountry == country {
 			domains = append(domains, domain)
-			
+
 			// Stop if we've reached the limit
 			if limit > 0 && len(domains) >= limit {
 				break
