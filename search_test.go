@@ -9,12 +9,13 @@ func TestSearch(t *testing.T) {
 	keywords := "new truck"
 	country := "us"
 	threshold := 0.5
+	limit := 3
 	dbPath := "./reference/rc_domain_embeds.sqlite3"
 	ollamaURL := "http://localhost:11434"
 	modelName := "nomic-embed-text:latest"
 
 	// Run the search
-	result, err := getMatchingDomains(keywords, country, threshold, dbPath, ollamaURL, modelName)
+	result, err := getMatchingDomains(keywords, country, threshold, limit, dbPath, ollamaURL, modelName)
 	if err != nil {
 		t.Fatalf("getMatchingDomains failed: %v", err)
 	}
@@ -35,6 +36,11 @@ func TestSearch(t *testing.T) {
 	// Verify we got results
 	if len(result.DN) == 0 {
 		t.Fatal("Expected at least one result, got none")
+	}
+
+	// Verify limit is enforced
+	if len(result.DN) > limit {
+		t.Errorf("Expected at most %d results (limit), got %d", limit, len(result.DN))
 	}
 
 	// Expected results from README

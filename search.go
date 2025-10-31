@@ -81,7 +81,8 @@ func encode(text string, ollamaURL string, modelName string) ([]float64, error) 
 
 // getMatchingDomains searches for matching domains using keywords and returns results
 // threshold: similarity score cutoff (0.0-1.0), results must have similarity >= threshold to be returned
-func getMatchingDomains(keywords string, country string, threshold float64, dbPath string, ollamaURL string, modelName string) (Response, error) {
+// limit: maximum number of results to return
+func getMatchingDomains(keywords string, country string, threshold float64, limit int, dbPath string, ollamaURL string, modelName string) (Response, error) {
 	startTime := time.Now()
 
 	resp := Response{
@@ -175,6 +176,11 @@ func getMatchingDomains(keywords string, country string, threshold float64, dbPa
 		// Filter by country if specified (and country matches)
 		if country == "" || resultCountry == country {
 			domains = append(domains, domain)
+			
+			// Stop if we've reached the limit
+			if limit > 0 && len(domains) >= limit {
+				break
+			}
 		}
 	}
 
