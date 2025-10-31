@@ -15,6 +15,23 @@ A Go module for semantic domain search using text embeddings and cosine similari
 - Ollama server running (default: `http://localhost:11434`)
 - CSV file with domain embeddings (format: `index,domain,country,embed`)
 
+
+### The CSV File
+
+Embeddings in the CSV file look like:
+
+"[-3.14846630e-02  4.35670600e-02 -1.37346910e-01 -6.45255440e-03 ... ]"
+
+They are from Ollama using nomic-embed-text-v1.5 so they are 768 4 byte parameters.
+
+Lines look like this:
+
+0,adobe.com,us,"[-3.14846630e-02  4.35670600e-02 -1.37346910e-01 -6.45255440e-03 ... ]"
+
+Generating a new one is more about figuring out the descriptive information used in the embedding encoding than anything else. 
+
+
+
 ## Installation
 
 ```bash
