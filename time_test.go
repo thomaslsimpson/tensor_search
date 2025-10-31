@@ -1,11 +1,18 @@
 package main
 
 import (
+	"flag"
 	"testing"
 	"time"
 )
 
+var ollamaURLFlag = flag.String("ollama-url", "http://localhost:11434", "Ollama server URL for tests")
+
 func TestTime(t *testing.T) {
+	// Parse flags if not already parsed
+	if !flag.Parsed() {
+		flag.Parse()
+	}
 	searchPhrases := []string{
 		"new truck",
 		"children's toys",
@@ -20,11 +27,13 @@ func TestTime(t *testing.T) {
 	}
 
 	dbPath := "./reference/rc_domains_embeds.csv"
-	ollamaURL := "http://localhost:11434"
+	ollamaURL := *ollamaURLFlag
 	modelName := "nomic-embed-text:latest"
 	country := "us"
 	threshold := 0.5
 	limit := 3
+
+	t.Logf("Using Ollama URL: %s\n", ollamaURL)
 
 	// Load embeddings once at the start (reused for all searches)
 	domainEmbeddings, err := loadEmbeddingsFromCSV(dbPath)
