@@ -19,6 +19,14 @@ func main() {
 
 	flag.Parse()
 
+	// Load embeddings once at startup (reused for all searches)
+	domainEmbeddings, err := loadEmbeddingsFromCSV(*dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading embeddings: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "Loaded %d domain embeddings\n", len(domainEmbeddings))
+
 	// Get keywords from command line (remaining positional arguments)
 	keywords := ""
 	if len(flag.Args()) > 0 {
@@ -33,7 +41,7 @@ func main() {
 
 	// If keywords provided on command line, run a single search
 	if keywords != "" {
-		result, err := getMatchingDomains(keywords, *country, *threshold, *limit, *dbPath, *ollamaURL, *modelName)
+		result, err := getMatchingDomains(keywords, *country, *threshold, *limit, domainEmbeddings, *ollamaURL, *modelName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -57,7 +65,7 @@ func main() {
 			continue // Skip empty lines
 		}
 
-		result, err := getMatchingDomains(line, *country, *threshold, *limit, *dbPath, *ollamaURL, *modelName)
+		result, err := getMatchingDomains(line, *country, *threshold, *limit, domainEmbeddings, *ollamaURL, *modelName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error searching '%s': %v\n", line, err)
 			continue

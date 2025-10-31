@@ -198,9 +198,10 @@ func loadEmbeddingsFromCSV(csvPath string) ([]DomainEmbedding, error) {
 
 // getMatchingDomains searches for matching domains using keywords and returns results
 // This version uses in-memory cosine similarity calculation instead of SQLite vector search
+// domainEmbeddings: pre-loaded embeddings from CSV (should be loaded once and reused)
 // threshold: similarity score cutoff (0.0-1.0), results must have similarity >= threshold to be returned
 // limit: maximum number of results to return
-func getMatchingDomains(keywords string, country string, threshold float64, limit int, dbPath string, ollamaURL string, modelName string) (Response, error) {
+func getMatchingDomains(keywords string, country string, threshold float64, limit int, domainEmbeddings []DomainEmbedding, ollamaURL string, modelName string) (Response, error) {
 	startTime := time.Now()
 
 	resp := Response{
@@ -223,14 +224,6 @@ func getMatchingDomains(keywords string, country string, threshold float64, limi
 		resp.ERR = 1
 		resp.MS = time.Since(startTime).Milliseconds()
 		return resp, fmt.Errorf("failed to encode keywords: %w", err)
-	}
-
-	// Load all embeddings from CSV file (dbPath is now treated as CSV path)
-	domainEmbeddings, err := loadEmbeddingsFromCSV(dbPath)
-	if err != nil {
-		resp.ERR = 2
-		resp.MS = time.Since(startTime).Milliseconds()
-		return resp, fmt.Errorf("failed to load embeddings: %w", err)
 	}
 
 	// Calculate similarity scores for all domains

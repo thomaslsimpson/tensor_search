@@ -26,6 +26,13 @@ func TestTime(t *testing.T) {
 	threshold := 0.5
 	limit := 3
 
+	// Load embeddings once at the start (reused for all searches)
+	domainEmbeddings, err := loadEmbeddingsFromCSV(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to load embeddings: %v", err)
+	}
+	t.Logf("Loaded %d domain embeddings\n", len(domainEmbeddings))
+
 	var totalOllamaTime time.Duration
 	var totalQueryTime time.Duration
 	var totalResults int
@@ -42,10 +49,10 @@ func TestTime(t *testing.T) {
 		}
 		ollamaTime := time.Since(startOllama)
 
-		// Time the full getMatchingDomains call (includes encoding + query)
+		// Time the full getMatchingDomains call (includes encoding + search)
 		// getMatchingDomains will encode again, but we use our measured encoding time
 		startTotal := time.Now()
-		result, err := getMatchingDomains(keywords, country, threshold, limit, dbPath, ollamaURL, modelName)
+		result, err := getMatchingDomains(keywords, country, threshold, limit, domainEmbeddings, ollamaURL, modelName)
 		totalTime := time.Since(startTotal)
 
 		if err != nil {

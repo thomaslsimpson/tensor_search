@@ -14,8 +14,14 @@ func TestSearch(t *testing.T) {
 	ollamaURL := "http://localhost:11434"
 	modelName := "nomic-embed-text:latest"
 
+	// Load embeddings once
+	domainEmbeddings, err := loadEmbeddingsFromCSV(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to load embeddings: %v", err)
+	}
+
 	// Run the search
-	result, err := getMatchingDomains(keywords, country, threshold, limit, dbPath, ollamaURL, modelName)
+	result, err := getMatchingDomains(keywords, country, threshold, limit, domainEmbeddings, ollamaURL, modelName)
 	if err != nil {
 		t.Fatalf("getMatchingDomains failed: %v", err)
 	}
