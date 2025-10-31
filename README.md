@@ -198,10 +198,3 @@ The embeddings are loaded once at startup and reused for all subsequent searches
    - Country code (if specified)
    - Limited to top N results (by distance, ascending)
 
-## License
-
-[Add your license here]
-
-## Contributing
-
-[Add contribution guidelines if applicable]
