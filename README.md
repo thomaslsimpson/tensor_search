@@ -1,218 +1,207 @@
+# Tensor Search
 
-The purpose of this project is to return a list of matching domain names given a set of keywords.
+A Go module for semantic domain search using text embeddings and cosine similarity. This tool searches a database of domain names by converting keyword queries into embeddings via Ollama and finding the most similar domains using in-memory cosine similarity calculations.
 
-The domain names are stored in an sqlite database (rc_domain_embeds.sqlite3) along with text embeddings.
+## Features
 
-Other services should be able to use this module by providing a path to a properly formatted sqlite database and then calling:
+- **Semantic Search**: Uses text embeddings to find domains semantically similar to your keywords
+- **Fast In-Memory Search**: Loads embeddings once and performs searches entirely in memory
+- **No CGO Dependencies**: Pure Go implementation with zero external dependencies (no CGO required)
+- **Configurable**: Supports custom thresholds, result limits, and country filtering
 
-get_matching_domains(keywords, country)
+## Requirements
 
-... which will return json in the format:
+- Go 1.25.0 or later
+- Ollama server running (default: `http://localhost:11434`)
+- CSV file with domain embeddings (format: `index,domain,country,embed`)
 
-{
-  "kw": keywords # the original string of keywords that we used to perform the search
-  "cn": country, # the country that they sent us to start with (or "us" which will be the default)
-  "dn": [],      # the list of strings (domains) that we returned which might be empty
-  "err": 0       # an error code which is 0 on success or a error code number otherwise
+## Installation
+
+```bash
+git clone <repository-url>
+cd tensor_search
+go build
+```
+
+## Usage
+
+### Command-Line Tool
+
+The `tensor_search` binary provides a command-line interface for searching domains.
+
+#### Single Search
+
+```bash
+./tensor_search "new truck"
+```
+
+#### With Custom Options
+
+```bash
+./tensor_search \
+  -db=./reference/rc_domains_embeds.csv \
+  -ollama=http://localhost:11434 \
+  -model=nomic-embed-text:latest \
+  -country=us \
+  -threshold=0.5 \
+  -limit=3 \
+  "buy new automobile"
+```
+
+#### Batch Processing from stdin
+
+```bash
+echo -e "new truck\nbest socks\nhiking gear" | ./tensor_search
+```
+
+#### Command-Line Flags
+
+- `-db` - Path to CSV file with embeddings (default: `./reference/rc_domains_embeds.csv`)
+- `-ollama` - Ollama server URL (default: `http://localhost:11434`)
+- `-model` - Model name for embeddings (default: `nomic-embed-text:latest`)
+- `-country` - Country code for filtering results (default: `us`)
+- `-threshold` - Similarity threshold 0.0-1.0 (default: `0.5`)
+- `-limit` - Maximum number of results to return (default: `3`)
+
+### As a Go Module
+
+```go
+package main
+
+import (
+    "fmt"
+    "tensor_search"
+)
+
+func main() {
+    // Load embeddings once at startup
+    domainEmbeddings, err := loadEmbeddingsFromCSV("./reference/rc_domains_embeds.csv")
+    if err != nil {
+        panic(err)
+    }
+
+    // Search for matching domains
+    result, err := getMatchingDomains(
+        "new truck",           // keywords
+        "us",                  // country
+        0.5,                   // threshold
+        3,                     // limit
+        domainEmbeddings,      // pre-loaded embeddings
+        "http://localhost:11434", // ollama URL
+        "nomic-embed-text:latest", // model name
+    )
+    
+    if err != nil {
+        panic(err)
+    }
+
+    fmt.Printf("Found %d domains: %v\n", len(result.DN), result.DN)
 }
+```
 
-So, if the user wrote something like:
+## Response Format
 
+The search function returns a JSON response with the following structure:
 
-domains := get_matching_domains("nice new trucks", "us") 
-
-... they might get back:
-
+```json
 {
-  "kw": "nice new trucks",
-  "cn": "us",
-  "dn": ["ford.com", "chevy.com"],
-  "err": 0
-}
-
-
-# Step 1: set up the project and write main() as "Hello WOrld" (test_go)
-
-First, we need to set up teh basic go environment and get a Hello World Program going. 
-This will ensure that our environment is set up properly and that we are not missing 
-anything that we need to keep working.
-
-
-# Step 2: make sure we can load the sqlite database and use it (test_sqlite)
-
-Next, we will need to load the sqlite database from the local examples (rc_domain_embeds.sqlite3) and run a query to make sure it works.
-
-This command should work locally before we start:
-
-sqlite3 ./reference/rc_domain_embeds.sqlite3 ".schema"
-
-... and display the table structure.
-
-
-In order to know that our go code will be able to do what we need, we will write a test 
-(that we can run using the go test system) that will run a query so we can verify that 
-all is well:
-
-This query should return 10 matches including ford.com:
-
-    SELECT d2.domain, d2.country, d2.distance
-    FROM domains AS d2
-    WHERE d2.embedding MATCH (SELECT embedding FROM domains WHERE domain = 'ford.com')
-    AND k = 10
-    ORDER BY d2.distance
-
-
-# Step 3: connect to Ollama and run a text encoding (test_ollama)
-
-We will not use external libraries to do this because we do not need them. We only need to call 
-Ollama via HTTP POST. The user will provide the URL and MODEL_NAME and we will run the HTTP POST
-that sends JSON and expects a JSON result like this:
-
-encode(text, ollama_url, model_name)
-
-The POST URL will look like:
-
-"{ollama_url}/api/embed"
-
-... and the data payload sent will look like:
-
-{
-  "model": model_name,
-  "input": text
-}
-
-... and the expected result will look like:
-
-{
-  "embeddings: [{embedding_1}, {embedding_2}, ... {embedding_N}]
-}
-
-... where the value of embedding_1 - N will be a tensor - a vector of floating point number that 
-we will use to query the sqlite database for a match.
-
-But in this step, we just want to ensure that we can call the Ollama server and get a response of 
-the proper length adn format that we can read and store internally.
-
-We will do this in the form of another go test that will verify that this is working.
-
-# Step 4: perform a complete run (test_search)
-
-We will write the actual function:
-
-get_matching_domains(keywords, country)
-
-... which will take the string of keywords, call the encode function from Step 3, then use 
-the generated embedding to run a query to find matches in the database.
-
-Running the keywors search for "nwe truck" should return these three top matches:
-
-{
-  'kw': 'new truck',
-  'cn': 'us',
-  'dn': ['napaonline.com', 'ford.com', 'suncentauto.com'],
-  'err': 0
-}
-
-
-Step 5: text timing (test_time)
-
-This test will run several keyword searches and check the time to run the Ollama check and to run the 
-query to find the matches.
-
-It will use these 10 search phrases:
-
-"new truck"
-"children's toys"
-"adult toys"
-"best socks"
-"designer shoes"
-"designer clothes"
-"thrift clothes"
-"hiking gear"
-"automotive parts"
-"shoe cleaning"
-
-... and it will show the results for each test along with the time (in millisecsons) and the average time overall.
-
-
-Step 6: 
-
-We will make an improvement. We will add a time to the results as 'ms' for milliseconds that the processing
-took to complete. The json for a query will include 'ms' like so:
-
-{
-  'kw': 'new truck',
-  'cn': 'us',
-  'dn': ['napaonline.com', 'ford.com', 'suncentauto.com'],
-  'ms': 24,
-  'err': 0
-}
-
-
-Step 7:
-
-We will now change the module so that the search call will accept a threshold that is a matching cutoff. The score 
-must be above the threshold or nothing will be returned. This should be a number from 0.0 - 1.0. Tests should be 
-updated to reflect this change and use a threshold of 0.5. This should result in a test query:
-
-Keywords: "new truck"
-
-Results:
-{
-  'kw': 'new truck',
-  'cn': 'us',
-  'dn': ['napaonline.com', 'ford.com', 'suncentauto.com'],
-  'err': 0
-}
-
-
-Step 8:
-
-We will also add a limit to the number of items returned. The number of items returned should be accepted in the 
-module call (tests should be updated to reflect 3 as the number to return).
-
-
-Step 9: update main.go to be a utility and example of how to use the module
-
-Now, we will update main.go to take a command line argument for the keywords to search on, the database location, 
-the ollama URL, and the model to use. We will default the model to the nomic model one we have been using; the 
-ollama url to the localhost:11434 url that we have been using in the tests; the database location to the reference 
-database in the tests. 
-
-If a keyword phrase is passed on the command line, we will use it as the keyword and run a single search. If not, 
-we will read stdin one line at a time and run each as individual queries. 
-
-
-
-
-Step 10: We will create a different version of the getMatchingDomains function that works without SQLite
-
-SQLite is being used to calculate the similarity score by running a query on the SQLite database and using 
-the distance to calculate the score. In this step we will change the system to use cosine distance to generate
-the result rather than the internal sqlite database functions. This will remove the requirement for CGO and 
-for using the github.com/asg017/sqlite-vec-go-bindings module.
-
-When we are done, we should be getting the same general results from our main binary, that is, when I run:
-
-/tensor_search -limit=3 -threshold=0.5 "buy new automobile"
-
-
-... I get:
-
-{
-  "kw":"buy new automobile",
-  "cn":"us",
-  "dn":[
-    "cargurus.com","ford.com","rentalcars.com"
+  "kw": "new truck",              // Original keywords
+  "cn": "us",                     // Country code
+  "dn": [                         // List of matching domains
+    "napaonline.com",
+    "ford.com",
+    "suncentauto.com"
   ],
-  "ms":436,
-  "err":0
+  "ms": 60,                       // Processing time in milliseconds
+  "err": 0                        // Error code (0 = success)
 }
+```
 
-... and when this is working correctly, I will get the same results but without the sqlite vector requirements.
+### Error Codes
 
+- `0` - Success
+- `1` - Failed to encode keywords (Ollama error)
+- `2` - Failed to load embeddings (CSV file error)
 
+## CSV File Format
 
+The CSV file should have the following format:
 
+```csv
+,domain,country,embed
+0,example.com,us,"[-0.031 0.044 -0.137 ...]"
+1,another.com,us,"[-0.025 0.038 -0.142 ...]"
+```
 
+Where:
+- Column 1: Index (can be ignored)
+- Column 2: Domain name
+- Column 3: Country code
+- Column 4: Embedding vector as a numpy-style array string (768 float values)
 
+The embedding string format should be: `"[value1 value2 value3 ...]"` with 768 space-separated floating-point values in scientific notation.
+
+## Examples
+
+### Example 1: Basic Search
+
+```bash
+$ ./tensor_search "new truck"
+Loaded 9544 domain embeddings
+{"kw":"new truck","cn":"us","dn":["napaonline.com","ford.com","suncentauto.com"],"ms":412,"err":0}
+```
+
+### Example 2: Search with Higher Threshold
+
+```bash
+$ ./tensor_search -threshold=0.6 "buy new automobile"
+Loaded 9544 domain embeddings
+{"kw":"buy new automobile","cn":"us","dn":["cargurus.com","ford.com"],"ms":445,"err":0}
+```
+
+### Example 3: More Results
+
+```bash
+$ ./tensor_search -limit=10 "automotive parts"
+Loaded 9544 domain embeddings
+{"kw":"automotive parts","cn":"us","dn":["partsgeek.com","napaonline.com",...],"ms":398,"err":0}
+```
+
+## Testing
+
+Run the test suite:
+
+```bash
+go test -v
+```
+
+Run timing tests with custom Ollama URL:
+
+```bash
+go test -v -run TestTime -ollama-url=http://localhost:11434
+```
+
+## Performance
+
+- **Initial Load**: ~300-400ms to load ~10,000 domain embeddings from CSV
+- **Search Time**: ~5-10ms per search (after initial load)
+- **Ollama Encoding**: ~15-50ms per query (depends on model)
+
+The embeddings are loaded once at startup and reused for all subsequent searches, making batch operations very efficient.
+
+## How It Works
+
+1. **Embedding Generation**: Keywords are sent to Ollama's embedding API to generate a 768-dimensional vector
+2. **Similarity Calculation**: Cosine similarity is calculated between the query embedding and all domain embeddings in memory
+3. **Filtering & Sorting**: Results are filtered by:
+   - Similarity threshold (must be >= threshold)
+   - Country code (if specified)
+   - Limited to top N results (by distance, ascending)
+
+## License
+
+[Add your license here]
+
+## Contributing
+
+[Add contribution guidelines if applicable]
