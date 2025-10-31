@@ -44,7 +44,7 @@ Next, we will need to load the sqlite database from the local examples (rc_domai
 
 This command should work locally before we start:
 
-sqlite3 ./rc_domain_embeds.sqlite3 ".schema"
+sqlite3 ./reference/rc_domain_embeds.sqlite3 ".schema"
 
 ... and display the table structure.
 

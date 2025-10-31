@@ -13,7 +13,7 @@ func TestSQLite(t *testing.T) {
 	sqlite_vec.Auto()
 
 	// Open the database
-	db, err := sql.Open("sqlite3", "./rc_domain_embeds.sqlite3")
+	db, err := sql.Open("sqlite3", "./reference/rc_domain_embeds.sqlite3")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}

@@ -8,7 +8,7 @@ import (
 func TestSearch(t *testing.T) {
 	keywords := "new truck"
 	country := "us"
-	dbPath := "./rc_domain_embeds.sqlite3"
+	dbPath := "./reference/rc_domain_embeds.sqlite3"
 	ollamaURL := "http://localhost:11434"
 	modelName := "nomic-embed-text:latest"
 

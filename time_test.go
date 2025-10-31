@@ -19,7 +19,7 @@ func TestTime(t *testing.T) {
 		"shoe cleaning",
 	}
 
-	dbPath := "./rc_domain_embeds.sqlite3"
+	dbPath := "./reference/rc_domain_embeds.sqlite3"
 	ollamaURL := "http://localhost:11434"
 	modelName := "nomic-embed-text:latest"
 	country := "us"
@@ -39,7 +39,7 @@ func TestTime(t *testing.T) {
 			continue
 		}
 		ollamaTime := time.Since(startOllama)
-		
+
 		// Time the full getMatchingDomains call (includes encoding + query)
 		// getMatchingDomains will encode again, but we use our measured encoding time
 		startTotal := time.Now()
@@ -59,7 +59,7 @@ func TestTime(t *testing.T) {
 			// If encoding took longer in getMatchingDomains, use a small default
 			queryTime = 5 * time.Millisecond
 		}
-		
+
 		totalOllamaTime += ollamaTime
 		totalQueryTime += queryTime
 		totalResults += len(result.DN)
@@ -91,4 +91,3 @@ func TestTime(t *testing.T) {
 	t.Logf("Total query time: %d ms", totalQueryTime.Milliseconds())
 	t.Logf("Total time: %d ms", (totalOllamaTime + totalQueryTime).Milliseconds())
 }
-
