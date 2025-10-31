@@ -10,12 +10,18 @@ func TestSearch(t *testing.T) {
 	country := "us"
 	threshold := 0.5
 	limit := 3
-	dbPath := "./reference/rc_domain_embeds.sqlite3"
+	dbPath := "./reference/rc_domains_embeds.csv"
 	ollamaURL := "http://localhost:11434"
 	modelName := "nomic-embed-text:latest"
 
+	// Load embeddings once
+	domainEmbeddings, err := loadEmbeddingsFromCSV(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to load embeddings: %v", err)
+	}
+
 	// Run the search
-	result, err := getMatchingDomains(keywords, country, threshold, limit, dbPath, ollamaURL, modelName)
+	result, err := getMatchingDomains(keywords, country, threshold, limit, domainEmbeddings, ollamaURL, modelName)
 	if err != nil {
 		t.Fatalf("getMatchingDomains failed: %v", err)
 	}

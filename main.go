@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// Define command line flags
-	dbPath := flag.String("db", "./reference/rc_domain_embeds.sqlite3", "Path to the SQLite database")
+	dbPath := flag.String("db", "./reference/rc_domains_embeds.csv", "Path to the CSV file with embeddings")
 	ollamaURL := flag.String("ollama", "http://localhost:11434", "Ollama server URL")
 	modelName := flag.String("model", "nomic-embed-text:latest", "Model name for embeddings")
 	country := flag.String("country", "us", "Country code for filtering results")
@@ -18,6 +18,14 @@ func main() {
 	limit := flag.Int("limit", 3, "Maximum number of results to return")
 
 	flag.Parse()
+
+	// Load embeddings once at startup (reused for all searches)
+	domainEmbeddings, err := loadEmbeddingsFromCSV(*dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading embeddings: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "Loaded %d domain embeddings\n", len(domainEmbeddings))
 
 	// Get keywords from command line (remaining positional arguments)
 	keywords := ""
@@ -33,7 +41,7 @@ func main() {
 
 	// If keywords provided on command line, run a single search
 	if keywords != "" {
-		result, err := getMatchingDomains(keywords, *country, *threshold, *limit, *dbPath, *ollamaURL, *modelName)
+		result, err := getMatchingDomains(keywords, *country, *threshold, *limit, domainEmbeddings, *ollamaURL, *modelName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
@@ -57,7 +65,7 @@ func main() {
 			continue // Skip empty lines
 		}
 
-		result, err := getMatchingDomains(line, *country, *threshold, *limit, *dbPath, *ollamaURL, *modelName)
+		result, err := getMatchingDomains(line, *country, *threshold, *limit, domainEmbeddings, *ollamaURL, *modelName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error searching '%s': %v\n", line, err)
 			continue

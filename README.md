@@ -185,3 +185,34 @@ we will read stdin one line at a time and run each as individual queries.
 
 
 
+Step 10: We will create a different version of the getMatchingDomains function that works without SQLite
+
+SQLite is being used to calculate the similarity score by running a query on the SQLite database and using 
+the distance to calculate the score. In this step we will change the system to use cosine distance to generate
+the result rather than the internal sqlite database functions. This will remove the requirement for CGO and 
+for using the github.com/asg017/sqlite-vec-go-bindings module.
+
+When we are done, we should be getting the same general results from our main binary, that is, when I run:
+
+/tensor_search -limit=3 -threshold=0.5 "buy new automobile"
+
+
+... I get:
+
+{
+  "kw":"buy new automobile",
+  "cn":"us",
+  "dn":[
+    "cargurus.com","ford.com","rentalcars.com"
+  ],
+  "ms":436,
+  "err":0
+}
+
+... and when this is working correctly, I will get the same results but without the sqlite vector requirements.
+
+
+
+
+
+
