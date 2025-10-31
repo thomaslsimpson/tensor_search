@@ -1,17 +1,16 @@
 package main
 
 import (
-	"database/sql"
-	"encoding/binary"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
+	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
-
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 // Response represents the JSON response format
@@ -79,7 +78,126 @@ func encode(text string, ollamaURL string, modelName string) ([]float64, error) 
 	return result.Embeddings[0], nil
 }
 
+// DomainEmbedding represents a domain with its embedding vector
+type DomainEmbedding struct {
+	Domain    string
+	Country   string
+	Embedding []float32 // 768-dimensional vector as float32
+}
+
+// cosineSimilarity calculates cosine similarity between two vectors
+// Returns a value between -1 and 1, where 1 is perfect match, -1 is opposite
+// a is []float64 (from Ollama), b is []float32 (from CSV)
+func cosineSimilarity(a []float64, b []float32) float64 {
+	if len(a) != len(b) {
+		return 0.0
+	}
+
+	var dotProduct, normA, normB float64
+	for i := 0; i < len(a); i++ {
+		valB := float64(b[i])
+		dotProduct += a[i] * valB
+		normA += a[i] * a[i]
+		normB += valB * valB
+	}
+
+	if normA == 0 || normB == 0 {
+		return 0.0
+	}
+
+	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
+}
+
+// cosineDistance converts cosine similarity to cosine distance
+// Cosine distance = 1 - cosine_similarity (ranges from 0 to 2)
+func cosineDistance(similarity float64) float64 {
+	return 1.0 - similarity
+}
+
+// parseEmbeddingString parses a numpy-style array string into a float32 slice
+// Input format: "[-3.14846630e-02  4.35670600e-02 ...]" (768 values)
+func parseEmbeddingString(embedStr string) ([]float32, error) {
+	// Remove brackets and trim whitespace
+	embedStr = strings.TrimSpace(embedStr)
+	embedStr = strings.TrimPrefix(embedStr, "[")
+	embedStr = strings.TrimSuffix(embedStr, "]")
+	embedStr = strings.TrimSpace(embedStr)
+
+	// Split by whitespace (handles both spaces and newlines)
+	fields := strings.Fields(embedStr)
+
+	if len(fields) != 768 {
+		return nil, fmt.Errorf("expected 768 embedding values, got %d", len(fields))
+	}
+
+	embedding := make([]float32, 768)
+	for i, field := range fields {
+		val, err := strconv.ParseFloat(strings.TrimSpace(field), 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse embedding value at index %d: %w", i, err)
+		}
+		embedding[i] = float32(val)
+	}
+
+	return embedding, nil
+}
+
+// loadEmbeddingsFromCSV loads all domain embeddings from the CSV file
+// CSV format: index,domain,country,embed (where embed is a numpy-style array string)
+func loadEmbeddingsFromCSV(csvPath string) ([]DomainEmbedding, error) {
+	file, err := os.Open(csvPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open CSV file: %w", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CSV file: %w", err)
+	}
+
+	if len(records) == 0 {
+		return nil, fmt.Errorf("CSV file is empty")
+	}
+
+	// Skip header row if present
+	startIdx := 0
+	if len(records) > 0 && (records[0][0] == "" || records[0][1] == "domain") {
+		startIdx = 1
+	}
+
+	var embeddings []DomainEmbedding
+	for i := startIdx; i < len(records); i++ {
+		record := records[i]
+		if len(record) < 4 {
+			continue // Skip invalid rows
+		}
+
+		// Column format: index,domain,country,embed
+		domain := strings.TrimSpace(record[1])
+		country := strings.TrimSpace(record[2])
+		embedStr := record[3]
+
+		embedding, err := parseEmbeddingString(embedStr)
+		if err != nil {
+			// Log error but continue with other rows
+			fmt.Fprintf(os.Stderr, "Warning: failed to parse embedding for %s: %v\n", domain, err)
+			continue
+		}
+
+		embeddings = append(embeddings, DomainEmbedding{
+			Domain:    domain,
+			Country:   country,
+			Embedding: embedding,
+		})
+	}
+
+	return embeddings, nil
+}
+
 // getMatchingDomains searches for matching domains using keywords and returns results
+// This version uses in-memory cosine similarity calculation instead of SQLite vector search
 // threshold: similarity score cutoff (0.0-1.0), results must have similarity >= threshold to be returned
 // limit: maximum number of results to return
 func getMatchingDomains(keywords string, country string, threshold float64, limit int, dbPath string, ollamaURL string, modelName string) (Response, error) {
@@ -99,95 +217,69 @@ func getMatchingDomains(keywords string, country string, threshold float64, limi
 		resp.CN = "us"
 	}
 
-	// Enable sqlite-vec extension
-	sqlite_vec.Auto()
-
 	// Get embedding from Ollama
-	embedding, err := encode(keywords, ollamaURL, modelName)
+	queryEmbedding, err := encode(keywords, ollamaURL, modelName)
 	if err != nil {
 		resp.ERR = 1
 		resp.MS = time.Since(startTime).Milliseconds()
 		return resp, fmt.Errorf("failed to encode keywords: %w", err)
 	}
 
-	// Open database connection
-	db, err := sql.Open("sqlite3", dbPath)
+	// Load all embeddings from CSV file (dbPath is now treated as CSV path)
+	domainEmbeddings, err := loadEmbeddingsFromCSV(dbPath)
 	if err != nil {
 		resp.ERR = 2
 		resp.MS = time.Since(startTime).Milliseconds()
-		return resp, fmt.Errorf("failed to open database: %w", err)
-	}
-	defer db.Close()
-
-	// Verify connection
-	if err := db.Ping(); err != nil {
-		resp.ERR = 3
-		resp.MS = time.Since(startTime).Milliseconds()
-		return resp, fmt.Errorf("failed to ping database: %w", err)
+		return resp, fmt.Errorf("failed to load embeddings: %w", err)
 	}
 
-	// Convert float64 embedding to float32 blob (vec0 stores embeddings as float32)
-	// vec0 expects embeddings as binary blobs with float32 values in little-endian format
-	embeddingBlob := make([]byte, len(embedding)*4) // 4 bytes per float32
-	for i, val := range embedding {
-		f32 := float32(val)
-		bits := math.Float32bits(f32)
-		binary.LittleEndian.PutUint32(embeddingBlob[i*4:(i+1)*4], bits)
+	// Calculate similarity scores for all domains
+	type Match struct {
+		Domain     string
+		Country    string
+		Similarity float64
+		Distance   float64
 	}
 
-	// Query using the embedding blob as a parameter
-	query := `
-		SELECT d.domain, d.country, d.distance
-		FROM domains AS d
-		WHERE d.embedding MATCH ?
-		AND k = 10
-		ORDER BY d.distance
-	`
+	matches := make([]Match, 0, len(domainEmbeddings))
+	for _, de := range domainEmbeddings {
+		similarity := cosineSimilarity(queryEmbedding, de.Embedding)
+		distance := cosineDistance(similarity)
 
-	rows, err := db.Query(query, embeddingBlob)
-	if err != nil {
-		resp.ERR = 4
-		resp.MS = time.Since(startTime).Milliseconds()
-		return resp, fmt.Errorf("failed to execute query: %w", err)
+		// Convert cosine similarity (-1 to 1) to 0-1 scale for threshold comparison
+		// Similarity on 0-1 scale = (cosine_similarity + 1) / 2
+		similarity01 := (similarity + 1.0) / 2.0
+
+		matches = append(matches, Match{
+			Domain:     de.Domain,
+			Country:    de.Country,
+			Similarity: similarity01,
+			Distance:   distance,
+		})
 	}
-	defer rows.Close()
 
+	// Sort by distance (ascending - lower distance = better match)
+	sort.Slice(matches, func(i, j int) bool {
+		return matches[i].Distance < matches[j].Distance
+	})
+
+	// Filter by threshold and country, then apply limit
 	domains := []string{}
-	for rows.Next() {
-		var domain string
-		var resultCountry string
-		var distance float64
-		if err := rows.Scan(&domain, &resultCountry, &distance); err != nil {
-			resp.ERR = 5
-			resp.MS = time.Since(startTime).Milliseconds()
-			return resp, fmt.Errorf("failed to scan row: %w", err)
-		}
-
-		// Convert cosine distance to similarity score
-		// Cosine distance ranges from 0 (perfect match) to 2 (opposite)
-		// Similarity = 1 - (distance / 2), where similarity ranges from 1.0 (perfect) to 0.0 (worst)
-		similarity := 1.0 - (distance / 2.0)
-
+	for _, match := range matches {
 		// Filter by threshold: similarity must be >= threshold
-		if similarity < threshold {
+		if match.Similarity < threshold {
 			continue
 		}
 
 		// Filter by country if specified (and country matches)
-		if country == "" || resultCountry == country {
-			domains = append(domains, domain)
+		if country == "" || match.Country == country {
+			domains = append(domains, match.Domain)
 
 			// Stop if we've reached the limit
 			if limit > 0 && len(domains) >= limit {
 				break
 			}
 		}
-	}
-
-	if err := rows.Err(); err != nil {
-		resp.ERR = 6
-		resp.MS = time.Since(startTime).Milliseconds()
-		return resp, fmt.Errorf("error iterating rows: %w", err)
 	}
 
 	resp.DN = domains

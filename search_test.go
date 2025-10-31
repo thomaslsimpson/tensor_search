@@ -10,7 +10,7 @@ func TestSearch(t *testing.T) {
 	country := "us"
 	threshold := 0.5
 	limit := 3
-	dbPath := "./reference/rc_domain_embeds.sqlite3"
+	dbPath := "./reference/rc_domains_embeds.csv"
 	ollamaURL := "http://localhost:11434"
 	modelName := "nomic-embed-text:latest"
 

@@ -10,7 +10,7 @@ import (
 
 func main() {
 	// Define command line flags
-	dbPath := flag.String("db", "./reference/rc_domain_embeds.sqlite3", "Path to the SQLite database")
+	dbPath := flag.String("db", "./reference/rc_domains_embeds.csv", "Path to the CSV file with embeddings")
 	ollamaURL := flag.String("ollama", "http://localhost:11434", "Ollama server URL")
 	modelName := flag.String("model", "nomic-embed-text:latest", "Model name for embeddings")
 	country := flag.String("country", "us", "Country code for filtering results")

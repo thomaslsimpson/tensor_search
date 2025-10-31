@@ -19,7 +19,7 @@ func TestTime(t *testing.T) {
 		"shoe cleaning",
 	}
 
-	dbPath := "./reference/rc_domain_embeds.sqlite3"
+	dbPath := "./reference/rc_domains_embeds.csv"
 	ollamaURL := "http://localhost:11434"
 	modelName := "nomic-embed-text:latest"
 	country := "us"
@@ -68,7 +68,7 @@ func TestTime(t *testing.T) {
 
 		t.Logf("Test %d: '%s'", i+1, keywords)
 		t.Logf("  Ollama encoding: %d ms", ollamaTime.Milliseconds())
-		t.Logf("  Database query: %d ms", queryTime.Milliseconds())
+		t.Logf("  CSV search time: %d ms", queryTime.Milliseconds())
 		t.Logf("  Total time: %d ms", totalTime.Milliseconds())
 		t.Logf("  Results: %d domains", len(result.DN))
 		if len(result.DN) > 0 {
@@ -86,7 +86,7 @@ func TestTime(t *testing.T) {
 	t.Logf("=== Summary ===")
 	t.Logf("Total searches: %d", len(searchPhrases))
 	t.Logf("Average Ollama encoding time: %d ms", avgOllamaTime.Milliseconds())
-	t.Logf("Average database query time: %d ms", avgQueryTime.Milliseconds())
+	t.Logf("Average CSV search time: %d ms", avgQueryTime.Milliseconds())
 	t.Logf("Average total time: %d ms", avgTotalTime.Milliseconds())
 	t.Logf("Average results per search: %.1f domains", avgResults)
 	t.Logf("Total Ollama time: %d ms", totalOllamaTime.Milliseconds())
