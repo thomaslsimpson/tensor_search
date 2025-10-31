@@ -80,7 +80,8 @@ func encode(text string, ollamaURL string, modelName string) ([]float64, error) 
 }
 
 // getMatchingDomains searches for matching domains using keywords and returns results
-func getMatchingDomains(keywords string, country string, dbPath string, ollamaURL string, modelName string) (Response, error) {
+// threshold: similarity score cutoff (0.0-1.0), results must have similarity >= threshold to be returned
+func getMatchingDomains(keywords string, country string, threshold float64, dbPath string, ollamaURL string, modelName string) (Response, error) {
 	startTime := time.Now()
 
 	resp := Response{
@@ -159,6 +160,16 @@ func getMatchingDomains(keywords string, country string, dbPath string, ollamaUR
 			resp.ERR = 5
 			resp.MS = time.Since(startTime).Milliseconds()
 			return resp, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		// Convert cosine distance to similarity score
+		// Cosine distance ranges from 0 (perfect match) to 2 (opposite)
+		// Similarity = 1 - (distance / 2), where similarity ranges from 1.0 (perfect) to 0.0 (worst)
+		similarity := 1.0 - (distance / 2.0)
+
+		// Filter by threshold: similarity must be >= threshold
+		if similarity < threshold {
+			continue
 		}
 
 		// Filter by country if specified (and country matches)

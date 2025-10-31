@@ -8,12 +8,13 @@ import (
 func TestSearch(t *testing.T) {
 	keywords := "new truck"
 	country := "us"
+	threshold := 0.5
 	dbPath := "./reference/rc_domain_embeds.sqlite3"
 	ollamaURL := "http://localhost:11434"
 	modelName := "nomic-embed-text:latest"
 
 	// Run the search
-	result, err := getMatchingDomains(keywords, country, dbPath, ollamaURL, modelName)
+	result, err := getMatchingDomains(keywords, country, threshold, dbPath, ollamaURL, modelName)
 	if err != nil {
 		t.Fatalf("getMatchingDomains failed: %v", err)
 	}

@@ -23,6 +23,7 @@ func TestTime(t *testing.T) {
 	ollamaURL := "http://localhost:11434"
 	modelName := "nomic-embed-text:latest"
 	country := "us"
+	threshold := 0.5
 
 	var totalOllamaTime time.Duration
 	var totalQueryTime time.Duration
@@ -43,7 +44,7 @@ func TestTime(t *testing.T) {
 		// Time the full getMatchingDomains call (includes encoding + query)
 		// getMatchingDomains will encode again, but we use our measured encoding time
 		startTotal := time.Now()
-		result, err := getMatchingDomains(keywords, country, dbPath, ollamaURL, modelName)
+		result, err := getMatchingDomains(keywords, country, threshold, dbPath, ollamaURL, modelName)
 		totalTime := time.Since(startTotal)
 
 		if err != nil {
